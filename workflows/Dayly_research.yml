@@ -1,0 +1,38 @@
+name: Dayly Deep Research
+
+on:
+  schedule:
+    # 毎週月曜日の午前9時(日本時間)に実行
+    # UTC（世界標準時）なので「0 0 * * 1」と記述
+    - cron: '0 0 * * 1'
+  workflow_dispatch: # 手動で今すぐ動かしたい時用のボタン
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write # Issueを作るための権限
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install google-genai
+
+      - name: Run Research
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python auto_news_researcher.py
+
+      - name: Create Issue
+        uses: peter-evans/create-issue-from-file@v5
+        with:
+          title: "Dayly News Report"
+          content-filepath: ./result.md
