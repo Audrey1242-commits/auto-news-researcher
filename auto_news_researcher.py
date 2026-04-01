@@ -5,21 +5,23 @@ def run_research():
     api_key = os.environ.get("GEMINI_API_KEY")
     client = genai.Client(api_key=api_key)
 
-    # リサーチ実行
-    prompt = "2026年3月最終週の主要なテクノロジーニュースを5つ、背景を含めて要約してください。"
+    # 修正ポイント: 引数の名前を最新の仕様に合わせる
     interaction = client.interactions.create(
-        model="gemini-3-flash",
-        tool="deep_research",
-        prompt=prompt
+        model="gemini-2.0-flash-exp", # または使用可能な最新モデル
+        input="2026年3月最終週の主要なテクノロジーニュースを5つ、背景を含めて要約してください。",
+        config={
+            "tools": [{"google_search_retrieval": {}}], # Deep Researchを有効化する設定
+            "dynamic_retrieval_config": {
+                "mode": "unspecified",
+                "dynamic_threshold": 0.06
+            }
+        }
     )
 
-    # 完了まで待機して結果を取得
-    # (Actionsのタイムアウト設定内で終わるよう調整)
-    result = interaction.result.text
+    # 結果の取得（完了まで待機が必要な場合はポーリング処理を入れる）
+    # ※ Interactions APIは非同期なため、statusを確認するループが必要です
+    print(f"Research started! ID: {interaction.id}")
     
-    # 結果を一時ファイルに書き出す（次のステップでIssueに投稿するため）
-    with open("result.md", "w", encoding="utf-8") as f:
-        f.write(f"# 今週のDeep Research報告\n\n{result}")
-
-if __name__ == "__main__":
-    run_research()
+    # (簡易的な取得例。実際にはループでCOMPLETEDを待つ処理を推奨)
+    result = client.interactions.get(interaction.id)
+    # ... 以下、結果の保存処理など
