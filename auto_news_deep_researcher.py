@@ -23,7 +23,9 @@ def run_deep_research(prompt):
     interaction = client.interactions.create(
         model="gemini-2.0-flash", # Deep Research対応モデル
         input=prompt,
-        tools=[{"google_search_retrieval": {}}]
+        tools=[{
+            "google_search": {} # もしくは "google_search_retrieval": {}
+        }]
     )
     
     print(f"リサーチ開始 (ID: {interaction.id})")
@@ -31,13 +33,16 @@ def run_deep_research(prompt):
     # 完了まで待機（ポーリング）
     while True:
         status = client.interactions.get(interaction.id)
+        # 取得した状態を文字列として処理
+        state = str(status.state).upper()
+        
         # 状態の確認（小文字の 'completed' や 'failed' の場合があるため注意）
-        if status.state == "COMPLETED":
+        f "COMPLETED" in state:
             return status.result.text
-        elif status.state == "FAILED":
+        elif "FAILED" in state:
             raise Exception(f"Deep Research失敗: {status.error}")
         
-        print("調査中...")
+        print(f"調査中... (現在の状態: {state})")
         time.sleep(20) # 20秒待機
 
 # ===== LINE送信関数 =====
