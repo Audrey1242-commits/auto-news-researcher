@@ -22,7 +22,7 @@ date_range = f"{past.strftime('%Y年%m月%d日')}〜{today.strftime('%Y年%m月%
 def run_deep_research(prompt):
     # Deep Researchを有効化して実行
     interaction = client.interactions.create(
-        model="gemini-2.0-flash", # Deep Research対応モデル
+        model="gemini-2.0-flash-thinking-exp", # Deep Research対応モデル
         input=prompt,
         tools=[{
             "type": "google_search_retrieval", # typeを明示的に指定
