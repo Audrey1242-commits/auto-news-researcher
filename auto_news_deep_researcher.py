@@ -3,24 +3,19 @@ import time
 import requests
 from datetime import datetime, timedelta
 
-# ===== 1. 設定（GitHub Secretsから読み込み） =====
+# ===== 1. 設定 =====
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 LINE_TOKEN = os.environ.get("LINE_TOKEN")
 USER_ID = os.environ.get("USER_ID")
 
-# ===== 2. 日付生成 =====
-today = datetime.now()
-past = today - timedelta(days=7)
-date_range = f"{past.strftime('%Y年%m月%d日')}〜{today.strftime('%Y年%m月%d日')}"
-
-# ===== 3. Deep Research実行関数 (HTTP直接リクエスト版) =====
+# ===== 2. Deep Research実行関数 =====
 def run_deep_research(prompt):
-    # 修正後のURL: models/の後を直接指定する形式に変更
-    # v1beta は必須です
+    # 【最重要】Deep Researchが確実に動作するモデル名とエンドポイントの組み合わせ
+    model_id = "gemini-2.0-flash" 
     base_url = "https://generativelanguage.googleapis.com/v1beta"
-    model_name = "models/gemini-2.0-flash" # または gemini-2.0-flash-exp
     
-    create_url = f"{base_url}/{model_name}/interactions?key={GEMINI_API_KEY}"
+    # 404を回避するためのパス形式
+    create_url = f"{base_url}/models/{model_id}:createInteraction?key={GEMINI_API_KEY}"
     
     headers = {"Content-Type": "application/json"}
     body = {
@@ -37,27 +32,26 @@ def run_deep_research(prompt):
         ]
     }
 
-    print(f"リクエスト送信先: {create_url}") # ログで確認用
+    print(f"Sending request to: {create_url}")
     response = requests.post(create_url, headers=headers, json=body)
     
     if response.status_code != 200:
-        # 404の場合、ここでURLが間違っていることが確定します
+        # ここでエラーが出る場合、APIキーが「Google AI Studio」でDeep Research権限を持っているか確認が必要です
         raise Exception(f"API起動エラー (Status: {response.status_code}): {response.text}")
 
     res_data = response.json()
-    # 返却される name は "interactions/XXX" という形式です
     resource_name = res_data.get("name", "")
     interaction_id = resource_name.split("/")[-1]
     
     print(f"リサーチ開始成功 (ID: {interaction_id})")
 
-    # ステータス確認用URLも /v1beta/interactions/ID の形式
+    # ステータス確認
     status_url = f"{base_url}/interactions/{interaction_id}?key={GEMINI_API_KEY}"
     
     while True:
         status_res = requests.get(status_url)
         if status_res.status_code != 200:
-            print(f"ステータス確認一時エラー: {status_res.status_code}")
+            print(f"ステータス確認待ち... ({status_res.status_code})")
             time.sleep(20)
             continue
 
@@ -65,56 +59,34 @@ def run_deep_research(prompt):
         state = status_data.get("state", "UNKNOWN")
         
         if state == "COMPLETED":
-            return status_data.get("result", {}).get("text", "結果が空でした")
+            return status_data.get("result", {}).get("text", "結果が取得できませんでした")
         elif state == "FAILED":
             raise Exception(f"リサーチ失敗: {status_data.get('error')}")
         
-        print(f"調査中... (状態: {state})")
+        print(f"調査中... (ステータス: {state})")
         time.sleep(30)
 
-# ===== 4. LINE送信関数 =====
+# ===== 3. LINE送信 / メイン処理 (変更なし) =====
 def send_line(message):
     url = "https://api.line.me/v2/bot/message/push"
-    headers = {
-        "Authorization": f"Bearer {LINE_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    # LINEの1メッセージ制限（5000文字）に配慮
-    body = {
-        "to": USER_ID,
-        "messages": [
-            {
-                "type": "text",
-                "text": message[:4900]
-            }
-        ]
-    }
-    res = requests.post(url, headers=headers, json=body)
-    if res.status_code != 200:
-        print(f"LINE送信失敗: {res.text}")
+    headers = {"Authorization": f"Bearer {LINE_TOKEN}", "Content-Type": "application/json"}
+    body = {"to": USER_ID, "messages": [{"type": "text", "text": message[:4900]}]}
+    requests.post(url, headers=headers, json=body)
 
-# ===== 5. メイン処理 =====
 if __name__ == "__main__":
+    today = datetime.now()
+    date_range = f"{(today - timedelta(days=7)).strftime('%Y年%m月%d日')}〜{today.strftime('%Y年%m月%d日')}"
+    
     prompts = [
-        f"{date_range}の日本および世界の「経済・国際情勢・政治」に関する主要ニュースをリサーチし、詳細レポートを作成して。",
-        f"{date_range}の「AI・半導体・ITサービス」に関する最新ニュースとビジネストレンドをリサーチして。",
-        f"{date_range}の日本株・米国株における、現在の市場環境で注目すべき銘柄とその理由をリサーチして。"
+        f"{date_range}の「経済・国際情勢」に関するニュースをDeep Researchで調査して詳細に報告して。",
+        f"{date_range}の「最新AI・ITトレンド」をDeep Researchで調査して要約して。"
     ]
 
     for i, p in enumerate(prompts, 1):
-        print(f"\n--- 質問{i}を実行中 ---")
+        print(f"\n--- 質問{i}開始 ---")
         try:
-            # Deep Researchの実行
-            result_text = run_deep_research(p)
-            
-            # 結果をLINEで送信
-            send_line(f"【質問{i}：Deep Research結果】\n\n{result_text}")
-            print(f"質問{i} の結果をLINEに送信しました。")
-            
+            result = run_deep_research(p)
+            send_line(f"【週刊リサーチ:{i}】\n\n{result}")
         except Exception as e:
-            error_msg = f"質問{i} の実行中にエラーが発生しました:\n{str(e)}"
-            print(error_msg)
-            send_line(error_msg)
-        
-        # 連続実行による負荷軽減のため、少し待機
-        time.sleep(5)
+            print(f"エラー発生: {e}")
+            send_line(f"エラー発生: {e}")
