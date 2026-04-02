@@ -15,8 +15,12 @@ date_range = f"{past.strftime('%Y年%m月%d日')}〜{today.strftime('%Y年%m月%
 
 # ===== 3. Deep Research実行関数 (HTTP直接リクエスト版) =====
 def run_deep_research(prompt):
-    # エンドポイントのパスを修正（models/ の後のスラッシュなど）
-    create_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:createInteraction?key={GEMINI_API_KEY}"
+    # 修正後のURL: models/の後を直接指定する形式に変更
+    # v1beta は必須です
+    base_url = "https://generativelanguage.googleapis.com/v1beta"
+    model_name = "models/gemini-2.0-flash" # または gemini-2.0-flash-exp
+    
+    create_url = f"{base_url}/{model_name}/interactions?key={GEMINI_API_KEY}"
     
     headers = {"Content-Type": "application/json"}
     body = {
@@ -33,24 +37,25 @@ def run_deep_research(prompt):
         ]
     }
 
+    print(f"リクエスト送信先: {create_url}") # ログで確認用
     response = requests.post(create_url, headers=headers, json=body)
     
-    # 【重要】JSON解析前に、レスポンスが正常（200 OK）かチェックする
     if response.status_code != 200:
+        # 404の場合、ここでURLが間違っていることが確定します
         raise Exception(f"API起動エラー (Status: {response.status_code}): {response.text}")
 
     res_data = response.json()
+    # 返却される name は "interactions/XXX" という形式です
     resource_name = res_data.get("name", "")
     interaction_id = resource_name.split("/")[-1]
     
     print(f"リサーチ開始成功 (ID: {interaction_id})")
 
-    status_url = f"https://generativelanguage.googleapis.com/v1beta/interactions/{interaction_id}?key={GEMINI_API_KEY}"
+    # ステータス確認用URLも /v1beta/interactions/ID の形式
+    status_url = f"{base_url}/interactions/{interaction_id}?key={GEMINI_API_KEY}"
     
     while True:
         status_res = requests.get(status_url)
-        
-        # ステータス確認時もエラーチェックを入れる
         if status_res.status_code != 200:
             print(f"ステータス確認一時エラー: {status_res.status_code}")
             time.sleep(20)
@@ -60,9 +65,7 @@ def run_deep_research(prompt):
         state = status_data.get("state", "UNKNOWN")
         
         if state == "COMPLETED":
-            # 結果の取り出し方をより安全に
             return status_data.get("result", {}).get("text", "結果が空でした")
-        
         elif state == "FAILED":
             raise Exception(f"リサーチ失敗: {status_data.get('error')}")
         
