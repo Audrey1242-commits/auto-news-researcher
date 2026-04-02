@@ -2,6 +2,7 @@ import os
 import time
 from datetime import datetime, timedelta
 from google import genai
+from google.genai import types
 
 # ===== 設定（GitHub Secretsから読み込み） =====
 # ローカルでテストする場合は環境変数に設定してください
@@ -23,9 +24,11 @@ def run_deep_research(prompt):
     interaction = client.interactions.create(
         model="gemini-2.0-flash", # Deep Research対応モデル
         input=prompt,
-        tools=[{
-            "google_search": {} # もしくは "google_search_retrieval": {}
-        }]
+        tools=[
+            types.Tool(
+                google_search=types.GoogleSearch()
+            )
+        ]
     )
     
     print(f"リサーチ開始 (ID: {interaction.id})")
