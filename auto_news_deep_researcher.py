@@ -37,7 +37,7 @@ def run_deep_research(prompt):
         state = str(status.state).upper()
         
         # 状態の確認（小文字の 'completed' や 'failed' の場合があるため注意）
-        f "COMPLETED" in state:
+        if "COMPLETED" in state:
             return status.result.text
         elif "FAILED" in state:
             raise Exception(f"Deep Research失敗: {status.error}")
