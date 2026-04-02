@@ -24,11 +24,10 @@ def run_deep_research(prompt):
     interaction = client.interactions.create(
         model="gemini-2.0-flash", # Deep Research対応モデル
         input=prompt,
-        tools=[
-            types.Tool(
-                google_search=types.GoogleSearch()
-            )
-        ]
+        tools=[{
+            "type": "google_search_retrieval", # typeを明示的に指定
+            "google_search_retrieval": {}
+        }]
     )
     
     print(f"リサーチ開始 (ID: {interaction.id})")
