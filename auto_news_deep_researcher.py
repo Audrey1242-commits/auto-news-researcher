@@ -15,13 +15,10 @@ date_range = f"{past.strftime('%Y年%m月%d日')}〜{today.strftime('%Y年%m月%
 
 # ===== 3. Deep Research実行関数 (HTTP直接リクエスト版) =====
 def run_deep_research(prompt):
-    # APIエンドポイント (v1betaを使用)
-    # モデルは Deep Research に対応した gemini-2.0-flash を指定
+    # エンドポイントのパスを修正（models/ の後のスラッシュなど）
     create_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:createInteraction?key={GEMINI_API_KEY}"
     
     headers = {"Content-Type": "application/json"}
-    
-    # SDKが自動生成するはずのJSON構造を「手書き」で定義
     body = {
         "input": prompt,
         "tools": [
@@ -36,40 +33,40 @@ def run_deep_research(prompt):
         ]
     }
 
-    # リサーチ開始のPOSTリクエスト
     response = requests.post(create_url, headers=headers, json=body)
+    
+    # 【重要】JSON解析前に、レスポンスが正常（200 OK）かチェックする
+    if response.status_code != 200:
+        raise Exception(f"API起動エラー (Status: {response.status_code}): {response.text}")
+
     res_data = response.json()
-
-    if "error" in res_data:
-        raise Exception(f"APIリクエストエラー: {res_data['error']['message']}")
-
-    # interactionのIDを取得 (形式: names/interactions/XXX -> XXXを取り出す)
     resource_name = res_data.get("name", "")
     interaction_id = resource_name.split("/")[-1]
     
     print(f"リサーチ開始成功 (ID: {interaction_id})")
 
-    # ステータス確認用のURL
     status_url = f"https://generativelanguage.googleapis.com/v1beta/interactions/{interaction_id}?key={GEMINI_API_KEY}"
     
-    # 完了までポーリング（ループ）
     while True:
         status_res = requests.get(status_url)
-        status_data = status_res.json()
         
+        # ステータス確認時もエラーチェックを入れる
+        if status_res.status_code != 200:
+            print(f"ステータス確認一時エラー: {status_res.status_code}")
+            time.sleep(20)
+            continue
+
+        status_data = status_res.json()
         state = status_data.get("state", "UNKNOWN")
         
         if state == "COMPLETED":
-            print("リサーチ完了！結果を取得します。")
-            # 結果のテキストを抽出
-            return status_data["result"]["text"]
+            # 結果の取り出し方をより安全に
+            return status_data.get("result", {}).get("text", "結果が空でした")
         
         elif state == "FAILED":
-            error_info = status_data.get("error", "不明なエラー")
-            raise Exception(f"Deep Researchが失敗しました: {error_info}")
+            raise Exception(f"リサーチ失敗: {status_data.get('error')}")
         
-        print(f"調査中... (現在のステータス: {state})")
-        # Deep Researchは時間がかかるため、間隔を長め（30秒）に設定
+        print(f"調査中... (状態: {state})")
         time.sleep(30)
 
 # ===== 4. LINE送信関数 =====
